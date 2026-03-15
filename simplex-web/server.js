@@ -14,6 +14,27 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+const ASM_FILES_DIR = path.join(__dirname, 'asm_files');
+const OUTPUT_FILES_DIR = path.join(__dirname, 'output_files');
+
+// Ensure output directory exists (redundant if already created but safe)
+if (!fs.existsSync(OUTPUT_FILES_DIR)) fs.mkdirSync(OUTPUT_FILES_DIR);
+
+app.get('/api/asm-files', (req, res) => {
+  if (!fs.existsSync(ASM_FILES_DIR)) return res.json([]);
+  const files = fs.readdirSync(ASM_FILES_DIR).filter(f => f.endsWith('.asm'));
+  res.json(files);
+});
+
+app.get('/api/asm-file/:name', (req, res) => {
+  const filePath = path.join(ASM_FILES_DIR, req.params.name);
+  if (fs.existsSync(filePath)) {
+    res.send(fs.readFileSync(filePath, 'utf8'));
+  } else {
+    res.status(404).send('File not found');
+  }
+});
+
 // The root folder is Uranus where asm/emu are located
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -113,7 +134,9 @@ app.post('/api/simulate', (req, res) => {
         }
 
         if (parsingMemory) {
-          memoryDump.push(trimmed);
+          if (!trimmed.includes('Total instructions executed')) {
+            memoryDump.push(trimmed);
+          }
           return;
         }
 
@@ -145,6 +168,12 @@ app.post('/api/simulate', (req, res) => {
       if (fs.existsSync(tempLogPath)) {
         successLogs = fs.readFileSync(tempLogPath, 'utf8');
       }
+
+      // Save outputs to output_files if it was a named file (we'll implement this later)
+      // For now, always save temp results as 'last' in output_files
+      fs.copyFileSync(tempObjPath, path.join(OUTPUT_FILES_DIR, 'bubble_obj.o'));
+      fs.copyFileSync(tempListfilePath, path.join(OUTPUT_FILES_DIR, 'bubble_listfile.lst'));
+      fs.writeFileSync(path.join(OUTPUT_FILES_DIR, 'bubble_logfile.log'), successLogs + "\n" + emuStdout);
 
       return res.json({
         success: true,

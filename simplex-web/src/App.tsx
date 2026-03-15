@@ -18,9 +18,28 @@ function App() {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isHex, setIsHex] = useState<boolean>(false);
   const [autoRunning, setAutoRunning] = useState<boolean>(false);
+  const [asmFiles, setAsmFiles] = useState<string[]>([]);
 
   // Highlighting effect state
   const [changedRegisters, setChangedRegisters] = useState<{ PC: boolean; A: boolean; B: boolean; SP: boolean }>({ PC: false, A: false, B: false, SP: false });
+
+  useEffect(() => {
+    fetch('http://localhost:3001/api/asm-files')
+      .then(res => res.json())
+      .then(data => setAsmFiles(data))
+      .catch(err => console.error('Failed to fetch ASM files:', err));
+  }, []);
+
+  const loadAsmFile = async (name: string) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/asm-file/${name}`);
+      const text = await response.text();
+      setCode(text);
+      setLogs(`Loaded ${name} into editor.`);
+    } catch (err) {
+      setLogs(`Failed to load ${name}.`);
+    }
+  };
 
   const currentState: ExecutionState = states[currentIndex] || { PC: 0, A: 0, B: 0, SP: 999 };
 
@@ -166,6 +185,19 @@ function App() {
           <span className="text-sm text-neutral-400">HEX</span>
         </div>
       </header>
+
+      {/* File Buttons */}
+      <div className="flex flex-wrap gap-2 px-1">
+        {asmFiles.map((file) => (
+          <button
+            key={file}
+            onClick={() => loadAsmFile(file)}
+            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 rounded-md text-xs font-semibold text-neutral-300 transition-all hover:border-emerald-500/50"
+          >
+            {file}
+          </button>
+        ))}
+      </div>
 
       {/* 4-Pane Layout */}
       <div className="flex-1 grid grid-cols-12 grid-rows-2 gap-4">
