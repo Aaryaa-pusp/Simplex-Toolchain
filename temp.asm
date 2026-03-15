@@ -1,6 +1,11 @@
-; A simple math test
-ldc 10      ; Load 10 into A
-adc 20      ; Add 20 to A (A should now be 30)
-adj -1      ; Move Stack Pointer down by 1
-stl 0       ; Store A (30) into the stack memory
-HALT        ; Stop the emulator
+; Test error handling 
+label: 
+label: ; duplicate label definition 
+br nonesuch ; no such label 
+ldc 08ge ; not a number 
+ldc ; missing operand 
+add 5 ; unexpected operand 
+ldc 5, 6; extra on end of line 
+0def: ; bogus label name 
+fibble; bogus mnemonic 
+0def ; bogus mnemonic

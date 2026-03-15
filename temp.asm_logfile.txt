@@ -1,0 +1,5 @@
+Errors detected during Pass 1. Assembly halted.
+line3:Duplicate label detected: label
+line8:Too many operands
+line10:Unknown mnemonic: fibble
+line11:Unknown mnemonic: 0def
