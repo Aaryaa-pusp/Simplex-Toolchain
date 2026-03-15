@@ -1,4 +1,4 @@
- ldc 0x1000 
+ ldc 1000 
  a2sp 
  adj -1 
  ldc result 
