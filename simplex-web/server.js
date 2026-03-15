@@ -28,6 +28,8 @@ app.post('/api/simulate', (req, res) => {
   const tempLogPath = path.join(PROJECT_ROOT, 'temp_logfile.txt');
   const tempObjPath = path.join(PROJECT_ROOT, 'temp_obj.o');
 
+  const tempListfilePath = path.join(PROJECT_ROOT, 'temp_listfile.lst');
+
   // 1. Save code to temp.asm
   fs.writeFileSync(tempAsmPath, code);
 
@@ -38,35 +40,49 @@ app.post('/api/simulate', (req, res) => {
 
   // 2. Run assembler
   exec(asmCmd, { cwd: PROJECT_ROOT }, (error, stdout, stderr) => {
+    // Attempt to read listfile if it exists, to show errors inline
+    let listfileContent = '';
+    if (fs.existsSync(tempListfilePath)) {
+      listfileContent = fs.readFileSync(tempListfilePath, 'utf8');
+    }
+
     // 3. If compilation fails, return error logs
     if (error) {
       let compilerLogs = error.message;
       if (fs.existsSync(tempLogPath)) {
         compilerLogs = fs.readFileSync(tempLogPath, 'utf8');
       }
-      return res.json({ success: false, logs: compilerLogs });
+      return res.json({ success: false, logs: compilerLogs, listfile: listfileContent });
     }
 
     // 4. If compilation succeeds, run emulator
     exec(emuCmd, { cwd: PROJECT_ROOT }, (emuError, emuStdout, emuStderr) => {
       if (emuError) {
-        return res.json({ success: false, logs: emuError.message });
+        return res.json({ success: false, logs: emuError.message, listfile: listfileContent });
       }
 
-      // 5 & 6. Parse stdout into states
-      // The emulator prints format like: PC = 00000000    A = 10  B = 0   SP = 999
+      // 5 & 6. Parse stdout into states and memory dump
       const lines = emuStdout.split('\n');
       const states = [];
+      let memoryDump = [];
 
-      // Add an initial state if needed
       let currentState = { PC: 0, A: 0, B: 0, SP: 0 };
+      let parsingMemory = false;
       
       lines.forEach(line => {
         const trimmed = line.trim();
         if (!trimmed) return;
 
-        // Try to parse the exact format: PC = 00000000    A = 10  B = 0   SP = 999
-        // Use a regex to extract values
+        if (trimmed.includes('Memory dump at end of execution')) {
+          parsingMemory = true;
+          return;
+        }
+
+        if (parsingMemory) {
+          memoryDump.push(trimmed);
+          return;
+        }
+
         const pcMatch = trimmed.match(/PC\s*=\s*(\w+)/);
         const aMatch = trimmed.match(/A\s*=\s*(-\d+|\d+)/);
         const bMatch = trimmed.match(/B\s*=\s*(-\d+|\d+)/);
@@ -99,7 +115,9 @@ app.post('/api/simulate', (req, res) => {
       return res.json({
         success: true,
         logs: successLogs,
-        states: states
+        states: states,
+        listfile: listfileContent,
+        memoryDump: memoryDump
       });
     });
   });

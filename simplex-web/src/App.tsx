@@ -12,6 +12,8 @@ interface ExecutionState {
 function App() {
   const [code, setCode] = useState<string>('; Write SIMPLEX assembly here\nstart:\n    ldc 10\n    adc 5\n    HALT\n');
   const [logs, setLogs] = useState<string>('Welcome to SIMPLEX Simulator.\n');
+  const [listfile, setListfile] = useState<string>('');
+  const [memoryDump, setMemoryDump] = useState<string[]>([]);
   const [states, setStates] = useState<ExecutionState[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [isHex, setIsHex] = useState<boolean>(false);
@@ -72,9 +74,13 @@ function App() {
       if (data.success) {
         setLogs(`Assemble Success:\n${data.logs}\n\nExecution trace mapped (${data.states.length} steps).`);
         setStates(data.states);
+        setListfile(data.listfile || 'No listfile generated');
+        setMemoryDump(data.memoryDump || []);
         setCurrentIndex(0);
       } else {
         setLogs(`Assemble Failed:\n${data.logs}`);
+        setListfile(data.listfile || '');
+        setMemoryDump([]);
         setStates([]);
         setCurrentIndex(0);
       }
@@ -216,32 +222,53 @@ function App() {
           </div>
         </div>
 
-        {/* Bottom Left: Console/Logs */}
+        {/* Bottom Left: Console/Logs & Memory */}
         <div className="col-span-8 row-span-1 border border-neutral-800 bg-neutral-900 rounded-xl overflow-hidden flex flex-col shadow-lg">
           <div className="bg-neutral-950 border-b border-neutral-800 p-2 text-xs font-semibold text-neutral-400 flex items-center gap-2">
             <Terminal className="w-4 h-4" />
-            Console
+            Console & Memory
           </div>
           <div className="flex-1 p-4 overflow-y-auto bg-[#0a0a0a]">
-            <pre className="text-xs text-neutral-300 whitespace-pre-wrap">{logs}</pre>
+            {/* Logs & Errors */}
+            <div className={`text-xs whitespace-pre-wrap mb-4 ${logs.includes('Failed') || logs.includes('Error') ? 'text-rose-400' : 'text-neutral-300'}`}>
+              {logs}
+            </div>
+            
+            {/* Memory Dump */}
+            {memoryDump.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-neutral-800">
+                <div className="text-xs font-bold text-amber-500 mb-2">Memory Dump:</div>
+                <pre className="text-xs text-amber-400 whitespace-pre-wrap">
+                  {memoryDump.join('\n')}
+                </pre>
+              </div>
+            )}
+
             {currentState.rawStr && (
-              <pre className="text-xs text-emerald-400 whitespace-pre-wrap mt-2 pt-2 border-t border-neutral-800">
+              <pre className="text-xs text-emerald-400 whitespace-pre-wrap mt-2 pt-2 border-t border-neutral-800 block">
                 &gt; {currentState.rawStr}
               </pre>
             )}
           </div>
         </div>
 
-        {/* Bottom Right: Memory Inspector (Placeholder based on states) */}
-         <div className="col-span-4 row-span-1 border border-neutral-800 bg-neutral-900 rounded-xl overflow-hidden flex flex-col shadow-lg">
-          <div className="bg-neutral-950 border-b border-neutral-800 p-2 text-xs font-semibold text-neutral-400 flex items-center gap-2">
+        {/* Bottom Right: Listfile Viewer */}
+        <div className="col-span-4 row-span-1 border border-neutral-800 bg-neutral-900 rounded-xl overflow-hidden flex flex-col shadow-lg">
+          <div className="bg-neutral-950 border-b border-neutral-800 p-2 text-xs font-semibold text-neutral-400 flex flex-row items-center gap-2">
             <HardDrive className="w-4 h-4" />
-            Memory Inspector
+            Listfile Viewer
           </div>
-          <div className="p-4 flex-1 flex flex-col gap-2 items-center justify-center text-center text-neutral-500 text-sm">
-            <HardDrive className="w-8 h-8 opacity-50 mb-2" />
-            <p>Full memory arrays are not provided by the current trace output format.</p>
-            <p className="text-xs text-neutral-600 mt-2">Update EMU C++ to print memory dumps to visualize them here.</p>
+          <div className="p-4 flex-1 overflow-y-auto bg-[#0a0a0a]">
+            {listfile ? (
+              <pre className="text-xs text-blue-300 whitespace-pre-wrap font-mono">
+                {listfile}
+              </pre>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center text-neutral-500 text-sm">
+                <HardDrive className="w-8 h-8 opacity-50 mb-2" />
+                <p>Run assembler to generate listfile.</p>
+              </div>
+            )}
           </div>
         </div>
 
