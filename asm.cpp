@@ -20,28 +20,11 @@ struct Codeline {
 };
 
 unordered_map<string, int> opcode_map = {
-    {"ldc", 0},     // B := A; A := value;
-    {"adc", 1},     // A := A + value;
-    {"ldl", 2},     // B := A; A := memory[SP + offset];
-    {"stl", 3},     // memory[SP + offset] := A; A := B;
-    {"ldnl", 4},    // A := memory[A + offset];
-    {"stnl", 5},    // memory[A + offset] := B;
-    {"add", 6},     // A := B + A;
-    {"sub", 7},     // A := B - A;
-    {"shl", 8},     // A := B << A;
-    {"shr", 9},     // A := B >> A;
-    {"adj", 10},    // SP := SP + value;
-    {"a2sp", 11},   // SP := A; A := B
-    {"sp2a", 12},   // B := A; A := SP;
-    {"call", 13},   // B := A; A := PC; PC := PC + offset;
-    {"return", 14}, // PC := A; A := B;
-    {"brz", 15},    // if A == 0 then PC := PC + offset
-    {"brlz", 16},   // if A < 0 then PC := PC + offset;
-    {"br", 17},     // PC := PC + offset;
-    {"HALT", 18},   // stop the emulator
-    {"data", 19},   // reserve a mem loc initialized to value specifies
-    {"SET", 20}     // set the label on this line to specified value
-};
+    {"ldc", 0},  {"adc", 1},   {"ldl", 2},   {"stl", 3},   {"ldnl", 4},
+    {"stnl", 5}, {"add", 6},   {"sub", 7},   {"shl", 8},   {"shr", 9},
+    {"adj", 10}, {"a2sp", 11}, {"sp2a", 12}, {"call", 13}, {"return", 14},
+    {"brz", 15}, {"brlz", 16}, {"br", 17},   {"HALT", 18}, {"data", 19},
+    {"SET", 20}};
 
 unordered_map<string, int> label_table;
 vector<string> error_log;
@@ -53,13 +36,10 @@ void logError(int line, const string &msg) {
   cerr << "[ASM ERROR] " << entry << "\n";
 }
 
-// converting decimal number to hex
 string toHex(unsigned int value, int padding) {
   stringstream ss;
   ss << setfill('0') << setw(padding) << hex << value;
   string res = ss.str();
-  // substr(begining , length) so here we omit length so until end string will
-  // be returned
   return (res.length() > padding) ? res.substr(res.length() - padding) : res;
 }
 
@@ -100,20 +80,32 @@ int main(int argc, char *argv[]) {
   int line_counter = 1;
 
   while (getline(infile, line)) {
+    if (!line.empty() && line.back() == '\r') {
+      line.pop_back();
+    }
+
     size_t comment_pos = line.find(';');
     if (comment_pos != string::npos) {
       line = line.substr(0, comment_pos);
     }
 
-    size_t colon_pos = line.find(':');
-    if (colon_pos != string::npos) {
-      line.insert(colon_pos + 1, " ");
+    string processed_line = "";
+    for (size_t i = 0; i < line.length(); i++) {
+      char c = line[i];
+      if (c == ':') {
+        processed_line += ": ";
+      } else if (c == '+' || c == '-') {
+        processed_line += " ";
+        processed_line += c;
+      } else {
+        processed_line += c;
+      }
     }
+    line = processed_line;
 
     stringstream ss(line);
     string token, label, mnemonic, operand;
 
-    // if there are no more words to be read
     if (!(ss >> token)) {
       line_counter++;
       continue;
@@ -131,8 +123,9 @@ int main(int argc, char *argv[]) {
         line_counter++;
         continue;
       }
-    } else
+    } else {
       mnemonic = token;
+    }
 
     ss >> operand;
 
@@ -157,13 +150,8 @@ int main(int argc, char *argv[]) {
   infile.close();
 
   int pass1_error_count = error_log.size();
-
-  // ---- Pass 2: Resolve operands & check for remaining errors ----
-  // Always runs, even if Pass 1 had errors, so we collect ALL problems.
-
   string base_name = filename.substr(0, filename.find_last_of('.'));
 
-  // Store resolved binary instructions for writing later (only if no errors)
   struct ResolvedInst {
     int pc;
     string label;
@@ -179,7 +167,6 @@ int main(int argc, char *argv[]) {
     bool needs_operand = false;
     bool is_branch = false;
 
-    // Skip operand checks for instructions with unknown mnemonics (op_code=-1)
     if (opcode >= 0) {
       if ((opcode >= 0 && opcode <= 5) || opcode == 19 || opcode == 10 ||
           opcode == 20) {
@@ -204,23 +191,18 @@ int main(int argc, char *argv[]) {
 
     unsigned int binary_inst;
 
-    // If it's 'data' or 'SET', do not attach an opcode. Just use the raw
-    // 32-bit value.
     if (opcode == 19 || opcode == 20) {
       binary_inst = val;
     } else if (opcode >= 0) {
-      // For normal instructions, shift the 24-bit operand and attach the
-      // 8-bit opcode
       binary_inst = ((val & 0xFFFFFF) << 8) | (opcode & 0xFF);
     } else {
-      binary_inst = 0; // placeholder for unknown-mnemonic instructions
+      binary_inst = 0;
     }
 
     resolved.push_back(
         {inst.pc, inst.label, inst.mnemonic, inst.operand, binary_inst});
   }
 
-  // ---- Final error report: all errors from BOTH passes ----
   if (!error_log.empty()) {
     if (pass1_error_count > 0)
       cerr << "\n[ASM] " << pass1_error_count << " error(s) in Pass 1.\n";
@@ -238,7 +220,6 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // ---- No errors: write output files ----
   ofstream list_file(base_name + "_listfile.lst");
   ofstream obj_file(base_name + "_obj.o", ios::binary);
 

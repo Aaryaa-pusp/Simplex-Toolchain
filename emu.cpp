@@ -94,11 +94,19 @@ public:
     cout << "\nMemory dump at end of execution\n";
     cout << "Address\tValue\n";
 
-    // Print ALL non-zero memory locations so data regions (arrays, variables)
-    // and stack values are both visible in the console.
-    for (int i = 0; i < (int)Memory.size(); i++) {
+    // Find the max address with non-zero content to dump a relevant range
+    int max_addr = 0;
+    for (int i = (int)Memory.size() - 1; i >= 0; i--) {
+        if (Memory[i] != 0) {
+            max_addr = i;
+            break;
+        }
+    }
+
+    // Print non-zero memory values up to max_addr (or at least some range)
+    for (int i = 0; i <= max_addr; i++) {
       if (Memory[i] != 0) {
-        cout << i << "\t" << Memory[i] << "\n";
+        cout << i << "\t" << Memory[i] << " (0x" << hex << Memory[i] << dec << ")\n";
       }
     }
     cout << "Total instructions executed: " << run_time << "\n";
