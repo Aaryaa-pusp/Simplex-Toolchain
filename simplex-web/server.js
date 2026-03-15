@@ -59,7 +59,7 @@ app.post('/api/simulate', (req, res) => {
   const emuCmd = isWin ? `.\\emu.exe temp_obj.o` : `./emu temp_obj.o`;
 
   // 2. Run assembler
-  exec(asmCmd, { cwd: PROJECT_ROOT }, (error, stdout, stderr) => {
+  exec(asmCmd, { cwd: PROJECT_ROOT, maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
     // --- Print every stderr line to the server console ---
     if (stderr) {
       stderr.split('\n').forEach(line => {
@@ -97,7 +97,7 @@ app.post('/api/simulate', (req, res) => {
     }
 
     // 4. If compilation succeeds, run emulator
-    exec(emuCmd, { cwd: PROJECT_ROOT }, (emuError, emuStdout, emuStderr) => {
+    exec(emuCmd, { cwd: PROJECT_ROOT, maxBuffer: 1024 * 1024 * 10 }, (emuError, emuStdout, emuStderr) => {
       // --- Print every emulator stderr line to the server console ---
       if (emuStderr) {
         emuStderr.split('\n').forEach(line => {
