@@ -128,13 +128,18 @@ app.post('/api/simulate', (req, res) => {
         const trimmed = line.trim();
         if (!trimmed) return;
 
-        if (trimmed.includes('Memory dump at end of execution')) {
+        if (trimmed.includes('Emulator Output:')) {
           parsingMemory = true;
+          memoryDump.push(trimmed);
           return;
         }
 
+        // Keep storing everything after 'Emulator Output:' into memoryDump
         if (parsingMemory) {
-          if (!trimmed.includes('Total instructions executed')) {
+          if (!trimmed.includes('HALT encountered')) {
+            memoryDump.push(trimmed);
+          } else {
+            // Include HALT line and registers in memory output as requested
             memoryDump.push(trimmed);
           }
           return;

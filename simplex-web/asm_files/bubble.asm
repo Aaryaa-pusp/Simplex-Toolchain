@@ -7,7 +7,7 @@
 ; Local 4: Value of array[j]
 ; Local 5: Value of array[j+1]
 
-        ldc 0x1000      ; Initialize Stack Pointer
+        ldc 1000        ; Initialize Stack Pointer (mem_size = 1000)
         a2sp            ; Move address to SP
         adj -6          ; Reserve 6 slots for local variables
 
@@ -55,14 +55,20 @@ inner:
         brz no_swap     ; if equal, no swap needed
 
         ; --- Swap Elements ---
+        ; array[j] = original array[j+1]
         ldl 3           ; A = addr(array[j])
-        ldnl 1          ; A = array[j+1]
-        ldl 3
-        stnl 0          ; array[j] = array[j+1]
+        ldl 5           ; B = addr(array[j]), A = array[j+1] 
+        ; wait, memory[A + operand] = B for stnl. 
+        ; So we need A = addr, B = value
+        ; To get A=addr and B=value:
+        ldl 5           ; A = array[j+1]
+        ldl 3           ; B = array[j+1], A = addr
+        stnl 0          ; memory[A + 0] = B -> array[j] = array[j+1]
 
+        ; array[j+1] = original array[j]
         ldl 4           ; A = original array[j]
-        ldl 3
-        stnl 1          ; array[j+1] = original array[j]
+        ldl 3           ; B = original array[j], A = addr
+        stnl 1          ; memory[A + 1] = B -> array[j+1] = original array[j]
 
 no_swap:
         ldl 1           ; A = j

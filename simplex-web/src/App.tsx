@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, StepForward, RefreshCw, Terminal, Cpu, HardDrive } from 'lucide-react';
+import { Play, StepForward, FastForward, RefreshCw, Terminal, Cpu, HardDrive } from 'lucide-react';
 
 interface ExecutionState {
   PC: number;
@@ -116,6 +116,14 @@ function App() {
     }
   };
 
+  const handleFastForward = () => {
+    if (states.length > 0) {
+      setCurrentIndex(states.length - 1);
+      setAutoRunning(false);
+      setLogs(prev => prev + '\nFast forwarded to end of execution.');
+    }
+  };
+
   const handleReset = () => {
     setAutoRunning(false);
     setCurrentIndex(0);
@@ -164,6 +172,14 @@ function App() {
           >
             <RefreshCw className={`w-4 h-4 ${autoRunning ? 'animate-spin' : ''}`} />
             {autoRunning ? 'Pause Auto' : 'Auto-Step'}
+          </button>
+          <button 
+            onClick={handleFastForward}
+            disabled={states.length === 0 || currentIndex >= states.length - 1}
+            className="flex items-center gap-2 bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors ml-2"
+          >
+            <FastForward className="w-4 h-4" />
+            Fast Forward
           </button>
           <button 
             onClick={handleReset}
@@ -269,8 +285,7 @@ function App() {
             {/* Memory Dump */}
             {memoryDump.length > 0 && (
               <div className="mt-4 pt-4 border-t border-neutral-800">
-                <div className="text-xs font-bold text-amber-500 mb-2">Memory Dump:</div>
-                <pre className="text-xs text-amber-400 whitespace-pre-wrap">
+                <pre className="text-xs text-amber-400/90 whitespace-pre-wrap font-mono">
                   {memoryDump.join('\n')}
                 </pre>
               </div>

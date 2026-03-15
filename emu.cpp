@@ -91,8 +91,10 @@ public:
   }
 
   void dumpMemory() {
-    cout << "\nMemory dump at end of execution\n";
-    cout << "Address\tValue\n";
+    cout << "\nEmulator Output:\n";
+    cout << "Data Section (non-zero values):\n";
+    cout << "Address       Hex           Decimal\n";
+    cout << "----------------------------------------\n";
 
     // Find the max address with non-zero content to dump a relevant range
     int max_addr = 0;
@@ -103,13 +105,16 @@ public:
         }
     }
 
-    // Print non-zero memory values up to max_addr (or at least some range)
+    // Print non-zero memory values up to max_addr exactly as requested
     for (int i = 0; i <= max_addr; i++) {
       if (Memory[i] != 0) {
-        cout << i << "\t" << Memory[i] << " (0x" << hex << Memory[i] << dec << ")\n";
+        cout << "mem[" << left << setw(6) << i << "] = 0x" 
+             << right << setfill('0') << setw(8) << hex << Memory[i] << dec << setfill(' ') 
+             << "  (" << (int)Memory[i] << ")\n";
       }
     }
-    cout << "Total instructions executed: " << run_time << "\n";
+    cout << "HALT encountered. Final Register Status:\n";
+    cout << "A: " << A << " B: " << B << " PC: " << PC << " SP: " << SP << "\n";
   }
 
   // This is the function a GUI "Step" button would call
