@@ -48,7 +48,9 @@ vector<string> error_log;
 vector<Codeline> instructions;
 
 void logError(int line, const string &msg) {
-  error_log.pb("line" + to_string(line) + ':' + msg);
+  string entry = "line " + to_string(line) + ": " + msg;
+  error_log.pb(entry);
+  cerr << "[ASM ERROR] " << entry << "\n";
 }
 
 // converting decimal number to hex
@@ -103,6 +105,11 @@ int main(int argc, char *argv[]) {
       line = line.substr(0, comment_pos);
     }
 
+    size_t colon_pos = line.find(':');
+    if (colon_pos != string::npos) {
+      line.insert(colon_pos + 1, " ");
+    }
+
     stringstream ss(line);
     string token, label, mnemonic, operand;
 
@@ -149,17 +156,22 @@ int main(int argc, char *argv[]) {
 
   infile.close();
 
-  if (!error_log.empty()) {
-    ofstream logfile(filename + "_logfile.txt");
-    logfile << "Errors detected during Pass 1. Assembly halted.\n";
-    for (const auto &err : error_log)
-      logfile << err << "\n";
-    return 1;
-  }
+  int pass1_error_count = error_log.size();
+
+  // ---- Pass 2: Resolve operands & check for remaining errors ----
+  // Always runs, even if Pass 1 had errors, so we collect ALL problems.
 
   string base_name = filename.substr(0, filename.find_last_of('.'));
-  ofstream list_file(base_name + "_listfile.lst");
-  ofstream obj_file(base_name + "_obj.o", ios::binary);
+
+  // Store resolved binary instructions for writing later (only if no errors)
+  struct ResolvedInst {
+    int pc;
+    string label;
+    string mnemonic;
+    string operand;
+    unsigned int binary;
+  };
+  vector<ResolvedInst> resolved;
 
   for (const auto &inst : instructions) {
     int opcode = inst.op_code;
@@ -167,59 +179,88 @@ int main(int argc, char *argv[]) {
     bool needs_operand = false;
     bool is_branch = false;
 
-    if ((opcode >= 0 && opcode <= 5) || opcode == 19 || opcode == 10 ||
-        opcode == 20) {
-      needs_operand = true;
-    } else if (opcode == 13 || (opcode >= 15 && opcode <= 17)) {
-      needs_operand = true;
-      is_branch = true;
-    }
-    if (needs_operand) {
-      if (inst.operand.empty())
-        logError(inst.line_num, "Missing operand");
-      val = resolveOperand(inst.operand, inst.pc, inst.line_num, is_branch);
-
-      if (val < -8388608 || val > 8388607) {
-        logError(inst.line_num, "Operand out of 24-bit range");
+    // Skip operand checks for instructions with unknown mnemonics (op_code=-1)
+    if (opcode >= 0) {
+      if ((opcode >= 0 && opcode <= 5) || opcode == 19 || opcode == 10 ||
+          opcode == 20) {
+        needs_operand = true;
+      } else if (opcode == 13 || (opcode >= 15 && opcode <= 17)) {
+        needs_operand = true;
+        is_branch = true;
       }
-    } else if (!inst.operand.empty()) {
-      logError(inst.line_num, "Unexpected operand");
+
+      if (needs_operand) {
+        if (inst.operand.empty())
+          logError(inst.line_num, "Missing operand");
+        val = resolveOperand(inst.operand, inst.pc, inst.line_num, is_branch);
+
+        if (val < -8388608 || val > 8388607) {
+          logError(inst.line_num, "Operand out of 24-bit range");
+        }
+      } else if (!inst.operand.empty()) {
+        logError(inst.line_num, "Unexpected operand");
+      }
     }
 
     unsigned int binary_inst;
 
-    // If it's 'data' or 'SET', do not attach an opcode. Just use the raw 32-bit
-    // value.
+    // If it's 'data' or 'SET', do not attach an opcode. Just use the raw
+    // 32-bit value.
     if (opcode == 19 || opcode == 20) {
       binary_inst = val;
-    } else {
-      // For normal instructions, shift the 24-bit operand and attach the 8-bit
-      // opcode
+    } else if (opcode >= 0) {
+      // For normal instructions, shift the 24-bit operand and attach the
+      // 8-bit opcode
       binary_inst = ((val & 0xFFFFFF) << 8) | (opcode & 0xFF);
-    }
-    string res_pc = toHex(inst.pc, 8);
-    string machine_code_str = toHex(binary_inst, 8);
-
-    if (!inst.label.empty()) {
-      list_file << res_pc << "\t        \t" << inst.label << ":\n";
+    } else {
+      binary_inst = 0; // placeholder for unknown-mnemonic instructions
     }
 
-    list_file << res_pc << "\t" << machine_code_str << "\t" << inst.mnemonic
-              << " " << inst.operand << "\n";
-
-    obj_file.write(reinterpret_cast<const char *>(&binary_inst),
-                   sizeof(binary_inst));
+    resolved.push_back(
+        {inst.pc, inst.label, inst.mnemonic, inst.operand, binary_inst});
   }
 
+  // ---- Final error report: all errors from BOTH passes ----
   if (!error_log.empty()) {
+    if (pass1_error_count > 0)
+      cerr << "\n[ASM] " << pass1_error_count << " error(s) in Pass 1.\n";
+    if ((int)error_log.size() > pass1_error_count)
+      cerr << "[ASM] " << (error_log.size() - pass1_error_count)
+           << " error(s) in Pass 2.\n";
+    cerr << "[ASM] Assembly failed with " << error_log.size()
+         << " total error(s).\n";
+
     ofstream logfile(base_name + "_logfile.txt");
-    logfile << "Errors detected during Pass 2. Assembly failed.\n";
+    logfile << "Assembly failed with " << error_log.size()
+            << " total error(s).\n";
     for (const auto &err : error_log)
       logfile << err << "\n";
     return 1;
   }
 
+  // ---- No errors: write output files ----
+  ofstream list_file(base_name + "_listfile.lst");
+  ofstream obj_file(base_name + "_obj.o", ios::binary);
+
+  for (const auto &r : resolved) {
+    string res_pc = toHex(r.pc, 8);
+    string machine_code_str = toHex(r.binary, 8);
+
+    if (!r.label.empty()) {
+      list_file << res_pc << "\t        \t" << r.label << ":\n";
+    }
+
+    list_file << res_pc << "\t" << machine_code_str << "\t" << r.mnemonic << " "
+              << r.operand << "\n";
+
+    obj_file.write(reinterpret_cast<const char *>(&r.binary), sizeof(r.binary));
+  }
+
+  string success_msg = "Assembly successful. Generated " + base_name +
+                       "_listfile.lst and " + base_name + "_obj.o\n";
+  cout << "[ASM] " << success_msg;
   ofstream logfile(base_name + "_logfile.txt");
-  logfile << "Code Compiled Successfully. Generated " << base_name
-          << "_listfile.lst and " << base_name << "_obj.o files\n";
+  logfile << success_msg;
+
+  return 0;
 }

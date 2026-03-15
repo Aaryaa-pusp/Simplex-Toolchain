@@ -27,7 +27,6 @@ app.post('/api/simulate', (req, res) => {
   const tempAsmPath = path.join(PROJECT_ROOT, 'temp.asm');
   const tempLogPath = path.join(PROJECT_ROOT, 'temp_logfile.txt');
   const tempObjPath = path.join(PROJECT_ROOT, 'temp_obj.o');
-
   const tempListfilePath = path.join(PROJECT_ROOT, 'temp_listfile.lst');
 
   // 1. Save code to temp.asm
@@ -40,25 +39,60 @@ app.post('/api/simulate', (req, res) => {
 
   // 2. Run assembler
   exec(asmCmd, { cwd: PROJECT_ROOT }, (error, stdout, stderr) => {
-    // Attempt to read listfile if it exists, to show errors inline
+    // --- Print every stderr line to the server console ---
+    if (stderr) {
+      stderr.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed) console.error('[ASM STDERR]', trimmed);
+      });
+    }
+    if (stdout) {
+      stdout.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed) console.log('[ASM STDOUT]', trimmed);
+      });
+    }
+
+    // Attempt to read listfile if it exists
     let listfileContent = '';
     if (fs.existsSync(tempListfilePath)) {
       listfileContent = fs.readFileSync(tempListfilePath, 'utf8');
     }
 
-    // 3. If compilation fails, return error logs
+    // 3. If compilation fails, return both stderr (line-by-line) and log file
     if (error) {
-      let compilerLogs = error.message;
+      let logfileContent = '';
       if (fs.existsSync(tempLogPath)) {
-        compilerLogs = fs.readFileSync(tempLogPath, 'utf8');
+        logfileContent = fs.readFileSync(tempLogPath, 'utf8');
       }
-      return res.json({ success: false, logs: compilerLogs, listfile: listfileContent });
+      // Combine stderr lines and logfile for a complete picture
+      const combinedLogs = (stderr || '').trim() + (logfileContent ? '\n' + logfileContent : '');
+      return res.json({
+        success: false,
+        logs: combinedLogs,
+        errors: (stderr || '').trim().split('\n').filter(l => l.trim()),
+        listfile: listfileContent
+      });
     }
 
     // 4. If compilation succeeds, run emulator
     exec(emuCmd, { cwd: PROJECT_ROOT }, (emuError, emuStdout, emuStderr) => {
+      // --- Print every emulator stderr line to the server console ---
+      if (emuStderr) {
+        emuStderr.split('\n').forEach(line => {
+          const trimmed = line.trim();
+          if (trimmed) console.error('[EMU STDERR]', trimmed);
+        });
+      }
+
       if (emuError) {
-        return res.json({ success: false, logs: emuError.message, listfile: listfileContent });
+        const combinedLogs = (emuStderr || '').trim() + '\n' + (emuError.message || '');
+        return res.json({
+          success: false,
+          logs: combinedLogs,
+          errors: (emuStderr || '').trim().split('\n').filter(l => l.trim()),
+          listfile: listfileContent
+        });
       }
 
       // 5 & 6. Parse stdout into states and memory dump
@@ -117,7 +151,8 @@ app.post('/api/simulate', (req, res) => {
         logs: successLogs,
         states: states,
         listfile: listfileContent,
-        memoryDump: memoryDump
+        memoryDump: memoryDump,
+        errors: []
       });
     });
   });

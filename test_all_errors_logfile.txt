@@ -1,0 +1,8 @@
+Assembly failed with 7 total error(s).
+line 3: Duplicate label detected: label
+line 8: Too many operands
+line 10: Unknown mnemonic: fibble
+line 11: Unknown mnemonic: 0def
+line 4: Invalid operand or undefined label: nonesuch
+line 6: Missing operand
+line 7: Unexpected operand

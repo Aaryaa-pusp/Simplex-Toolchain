@@ -16,10 +16,39 @@ private:
   int SP;
   vector<int> Memory;
   int run_time;
+  bool fault; // set true on any runtime error
 
   // Helper to print hex beautifully
   void printHex(int val, int width = 8) {
     cout << setfill('0') << setw(width) << hex << (unsigned int)val << dec;
+  }
+
+  // Print a runtime error with the PC that caused it, then set fault flag
+  void runtimeError(const string &msg) {
+    cerr << "[EMU RUNTIME ERROR] at PC=" << (PC - 1) << ": " << msg << "\n";
+    fault = true;
+  }
+
+  // Bounds-checked memory read
+  int memRead(int addr, const string &instr) {
+    if (addr < 0 || addr >= (int)Memory.size()) {
+      runtimeError(instr + " – memory read out of bounds (addr=" +
+                   to_string(addr) + ", mem_size=" +
+                   to_string(Memory.size()) + ")");
+      return 0;
+    }
+    return Memory[addr];
+  }
+
+  // Bounds-checked memory write
+  void memWrite(int addr, int val, const string &instr) {
+    if (addr < 0 || addr >= (int)Memory.size()) {
+      runtimeError(instr + " – memory write out of bounds (addr=" +
+                   to_string(addr) + ", mem_size=" +
+                   to_string(Memory.size()) + ")");
+      return;
+    }
+    Memory[addr] = val;
   }
 
 public:
@@ -30,6 +59,7 @@ public:
     SP = mem_size - 1; // Stack starts at the top of memory
     Memory.resize(mem_size, 0);
     run_time = 0;
+    fault = false;
   }
 
   bool loadBinary(const string &filename) {
@@ -61,17 +91,27 @@ public:
   }
 
   void dumpMemory() {
-    cout << "\nPrinting Memory (Stack Region)\n";
+    cout << "\nMemory dump at end of execution\n";
     cout << "Address\tValue\n";
-    for (int i = Memory.size() - 1; i >= SP; i--) {
-      cout << i << "\t" << Memory[i] << "\n";
+
+    // Print ALL non-zero memory locations so data regions (arrays, variables)
+    // and stack values are both visible in the console.
+    for (int i = 0; i < (int)Memory.size(); i++) {
+      if (Memory[i] != 0) {
+        cout << i << "\t" << Memory[i] << "\n";
+      }
     }
     cout << "Total instructions executed: " << run_time << "\n";
   }
 
   // This is the function a GUI "Step" button would call
   bool step() {
-    if (PC < 0 || PC >= Memory.size())
+    if (PC < 0 || PC >= (int)Memory.size()) {
+      cerr << "[EMU RUNTIME ERROR] PC out of bounds (PC=" << PC
+           << ", mem_size=" << Memory.size() << ")\n";
+      return false;
+    }
+    if (fault)
       return false;
 
     dumpState();
@@ -103,17 +143,17 @@ public:
       break; // adc
     case 2:
       B = A;
-      A = Memory[SP + operand];
+      A = memRead(SP + operand, "ldl");
       break; // ldl
     case 3:
-      Memory[SP + operand] = A;
+      memWrite(SP + operand, A, "stl");
       A = B;
       break; // stl
     case 4:
-      A = Memory[A + operand];
+      A = memRead(A + operand, "ldnl");
       break; // ldnl
     case 5:
-      Memory[A + operand] = B;
+      memWrite(A + operand, B, "stnl");
       break; // stnl
     case 6:
       A = B + A;
@@ -165,11 +205,11 @@ public:
     case 20: /* SET (ignored as execution) */
       break;
     default:
-      cout << "Unknown opcode: " << opcode << " at PC " << (PC - 1) << "\n";
+      runtimeError("Unknown opcode " + to_string(opcode));
       return false;
     }
 
-    return true;
+    return !fault;
   }
 
   // Run continuously until HALT (Used for CLI)

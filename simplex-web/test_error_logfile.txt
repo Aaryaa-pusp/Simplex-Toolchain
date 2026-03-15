@@ -1,0 +1,2 @@
+Errors detected during Pass 2. Assembly failed.
+line 3: Invalid operand or undefined label: x
